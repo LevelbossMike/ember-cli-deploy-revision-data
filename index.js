@@ -4,6 +4,27 @@ var RSVP = require('rsvp');
 
 var DeployPluginBase = require('ember-cli-deploy-plugin');
 
+function generateRevisionData() {
+  var self = this;
+
+  var promises = {
+      data: this._getData(),
+      scm: this._getScmData()
+  };
+
+  return RSVP.hash(promises)
+    .then(function(results) {
+      var data = results.data;
+      data.scm = results.scm;
+      self.log('generated revision data for revision: `' + data.revisionKey + '`', { verbose: true });
+      return data;
+    })
+    .then(function(data) {
+      return { revisionData: data };
+    })
+    .catch(this._errorMessage.bind(this));
+}
+
 module.exports = {
   name: 'ember-cli-deploy-revision-data',
 
@@ -25,29 +46,21 @@ module.exports = {
 
         scm: function(/* context */) {
           return require('./lib/scm-data-generators')['git'];
-        }
+        },
 
+        hookToUse: 'prepare'
+      },
+
+      willDeploy: function(/*context*/) {
+        if (this.readConfig('hookToUse') === 'willDeploy') {
+          return generateRevisionData.bind(this)();
+        }
       },
 
       prepare: function(/*context*/) {
-        var self = this;
-
-        var promises = {
-            data: this._getData(),
-            scm: this._getScmData()
-        };
-
-        return RSVP.hash(promises)
-          .then(function(results) {
-            var data = results.data;
-            data.scm = results.scm;
-            self.log('generated revision data for revision: `' + data.revisionKey + '`', { verbose: true });
-            return data;
-          })
-          .then(function(data) {
-            return { revisionData: data };
-          })
-          .catch(this._errorMessage.bind(this));
+        if (this.readConfig('hookToUse') === 'prepare') {
+          return generateRevisionData.bind(this)();
+        }
       },
 
       _getData: function() {
